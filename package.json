@@ -1,0 +1,12 @@
+{
+  "name": "clashroyale-browser",
+  "version": "1.0.0",
+  "description": "Clash Royale browser prototype with LAN multiplayer",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

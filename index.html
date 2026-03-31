@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Clash Royale · Browser</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ── Lobby overlay ──────────────────────────────────────────────────────── -->
+<div id="lobby">
+  <div id="lobby-content">
+    <div id="lobby-title">⚔️ Clash Royale</div>
+    <p id="lobby-subtitle">Prototype Browser</p>
+
+    <div id="lobby-buttons">
+      <button id="btn-solo" class="lobby-btn primary">▶ Jogar Solo</button>
+      <button id="btn-lan"  class="lobby-btn secondary">🌐 Jogar LAN</button>
+    </div>
+
+    <p id="lobby-status"></p>
+
+    <div id="lobby-hint" class="hidden">
+      <p>Para jogar em rede local, execute o servidor:</p>
+      <code>npm start</code>
+      <p>e ambos os jogadores abram a <strong>mesma URL</strong> e cliquem em "Jogar LAN".</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── Game ───────────────────────────────────────────────────────────────── -->
+<div id="app" class="hidden">
+
+  <!-- Top HUD -->
+  <div id="hud-top">
+    <div class="crown-box" id="enemy-box">
+      <span class="crown-icon">👑</span>
+      <span id="enemy-crowns">0</span>
+    </div>
+    <div style="min-width:80px"></div>
+    <div class="crown-box" id="player-box">
+      <span class="crown-icon">👑</span>
+      <span id="player-crowns">0</span>
+    </div>
+  </div>
+
+  <!-- Game Arena -->
+  <canvas id="gameCanvas" width="390" height="600"></canvas>
+
+  <!-- Bottom HUD -->
+  <div id="hud-bottom">
+    <div id="elixir-row">
+      <span id="elixir-icon">💜</span>
+      <div id="elixir-bar">
+        <div id="elixir-fill" style="width:50%"></div>
+      </div>
+      <span id="elixir-count">5</span>
+    </div>
+    <div id="card-row">
+      <div id="card-hand"></div>
+      <div id="next-card"></div>
+    </div>
+  </div>
+
+  <div id="instructions">Clique numa carta, depois clique no seu lado da arena para jogar</div>
+
+</div>
+
+<!-- Game Over overlay -->
+<div id="game-over" class="hidden">
+  <div id="game-over-content">
+    <div id="result-text"></div>
+    <div id="result-crowns"></div>
+    <button id="restart-btn">Jogar Novamente</button>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
