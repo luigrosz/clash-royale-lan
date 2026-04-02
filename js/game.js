@@ -290,36 +290,39 @@ class Game {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, C.W, C.H);
 
-    // No canvas flip: guest sees the arena in server coordinates.
-    // Their towers (team:'enemy') are at the TOP; they deploy in the top half.
-    // isMine('enemy') === true for guest, so their towers draw blue. ✓
+    // Guest view: entity Y-coordinates are flipped (guestY = H - serverY) so
+    // the guest sees their own camp at the BOTTOM — natural Clash Royale feel.
+    // isMine('enemy') === true for guest, so their entities still draw blue. ✓
     this._drawArena(ctx);
 
     const s = this.guestState;
     if (s) {
-      for (const ed of s.effects) this._drawEffectFromData(ctx, ed);
+      for (const ed of s.effects) {
+        this._drawEffectFromData(ctx, { ...ed, y: C.H - ed.y });
+      }
 
       for (const td of Object.values(s.towers)) {
         if (!td.alive) continue;
-        const t = Object.assign(Object.create(Tower.prototype), td);
+        const t = Object.assign(Object.create(Tower.prototype), td, { y: C.H - td.y });
         t.draw(ctx);
       }
 
       for (const td of s.troops) {
         if (!td.alive) continue;
         const def = CARDS[td.cardKey] || {};
-        const t   = Object.assign(Object.create(Troop.prototype), def, td);
+        const t   = Object.assign(Object.create(Troop.prototype), def, td, { y: C.H - td.y });
         t.draw(ctx);
       }
 
       for (const pd of s.projectiles) {
         if (!pd.alive) continue;
+        const gy = C.H - pd.y;
         ctx.beginPath();
-        ctx.arc(pd.x, pd.y, pd.r, 0, Math.PI * 2);
+        ctx.arc(pd.x, gy, pd.r, 0, Math.PI * 2);
         ctx.fillStyle = pd.color;
         ctx.fill();
         ctx.beginPath();
-        ctx.arc(pd.x, pd.y, pd.r + 2, 0, Math.PI * 2);
+        ctx.arc(pd.x, gy, pd.r + 2, 0, Math.PI * 2);
         ctx.strokeStyle = pd.color;
         ctx.globalAlpha = 0.4;
         ctx.lineWidth = 2;
@@ -328,21 +331,21 @@ class Game {
       }
     }
 
-    // Deploy zone + ghost — guest deploys in TOP half (their territory)
+    // Deploy zone + ghost — guest deploys in BOTTOM half (their camp after Y-flip)
     if (this.selectedCard !== null) {
       const key    = this.playerQueue[this.selectedCard];
       const card   = CARDS[key];
       if (card) {
         const isSpell = card.type === 'spell';
-        const inZone  = isSpell || this.mouseY < C.RIVER_Y;
+        const inZone  = isSpell || this.mouseY > C.RIVER_Y + C.RIVER_H;
 
         if (!isSpell) {
           ctx.fillStyle = 'rgba(52,152,219,0.09)';
-          ctx.fillRect(0, 0, C.W, C.RIVER_Y);
+          ctx.fillRect(0, C.RIVER_Y + C.RIVER_H, C.W, C.H - C.RIVER_Y - C.RIVER_H);
           ctx.strokeStyle = 'rgba(93,173,226,0.55)';
           ctx.lineWidth = 2;
           ctx.setLineDash([6, 6]);
-          ctx.strokeRect(2, 2, C.W - 4, C.RIVER_Y - 4);
+          ctx.strokeRect(2, C.RIVER_Y + C.RIVER_H + 2, C.W - 4, C.H - C.RIVER_Y - C.RIVER_H - 4);
           ctx.setLineDash([]);
         } else {
           ctx.fillStyle = 'rgba(52,152,219,0.05)';
@@ -361,13 +364,6 @@ class Game {
     }
 
     this._drawTimer(ctx);
-
-    // Side label so the guest knows which half is theirs
-    ctx.fillStyle = 'rgba(93,173,226,0.55)';
-    ctx.font = 'bold 11px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText('← YOUR SIDE', 6, 6);
   }
 
   _drawEffectFromData(ctx, ed) {
@@ -524,11 +520,11 @@ class Game {
       ctx.beginPath(); ctx.moveTo(RIGHT_BRIDGE_X - hw + 3, y); ctx.lineTo(RIGHT_BRIDGE_X + hw - 3, y); ctx.stroke();
     }
 
-    // Team tints — perspective-aware so each player sees their half in blue
-    const topIsEnemy = !isMine('player'); // guest: myTeam='enemy', so isMine('player')=false → top is theirs
-    ctx.fillStyle = topIsEnemy ? 'rgba(52,152,219,0.07)' : 'rgba(231,76,60,0.07)';
+    // Team tints — top = enemy (red), bottom = player (blue), same for both views
+    // because guest rendering flips entity Y so their camp is always at the bottom.
+    ctx.fillStyle = 'rgba(231,76,60,0.07)';
     ctx.fillRect(0, 0, W, RIVER_Y);
-    ctx.fillStyle = topIsEnemy ? 'rgba(231,76,60,0.07)' : 'rgba(52,152,219,0.07)';
+    ctx.fillStyle = 'rgba(52,152,219,0.07)';
     ctx.fillRect(0, RIVER_Y + RIVER_H, W, H - RIVER_Y - RIVER_H);
 
     // Centre dashed line
@@ -741,9 +737,9 @@ class Game {
     const isSpell = card.type === 'spell';
 
     if (this.mode === 'guest') {
-      // No flip: guest sees server coords directly.
-      // Guest's territory is the TOP half (y < RIVER_Y) — 'enemy' towers are at top.
-      if (!isSpell && cy >= C.RIVER_Y) {
+      // Guest view is Y-flipped: their camp is at canvas BOTTOM.
+      // Valid deploy zone: canvas bottom half (cy > RIVER_Y + RIVER_H).
+      if (!isSpell && cy <= C.RIVER_Y + C.RIVER_H) {
         this.selectedCard = null; this.renderCards(); return;
       }
       if (this.playerElixir < card.cost) {
@@ -757,7 +753,8 @@ class Game {
       this.renderCards();
 
       if (this.ws && this.ws.readyState === 1) {
-        this.ws.send(JSON.stringify({ type: 'deploy', cardKey: key, x: cx, y: cy }));
+        // Flip Y back to server coordinates before sending
+        this.ws.send(JSON.stringify({ type: 'deploy', cardKey: key, x: cx, y: C.H - cy }));
       }
       return;
     }
