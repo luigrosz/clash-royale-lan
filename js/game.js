@@ -290,27 +290,21 @@ class Game {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, C.W, C.H);
 
-    // Rotate 180°: guest sees their towers at the bottom of screen.
-    // Everything in server coordinates is drawn here and appears flipped.
-    ctx.save();
-    ctx.translate(C.W, C.H);
-    ctx.scale(-1, -1);
-
+    // No canvas flip: guest sees the arena in server coordinates.
+    // Their towers (team:'enemy') are at the TOP; they deploy in the top half.
+    // isMine('enemy') === true for guest, so their towers draw blue. ✓
     this._drawArena(ctx);
 
     const s = this.guestState;
     if (s) {
-      // Effects
       for (const ed of s.effects) this._drawEffectFromData(ctx, ed);
 
-      // Towers (reconstruct lightweight display objects)
       for (const td of Object.values(s.towers)) {
         if (!td.alive) continue;
         const t = Object.assign(Object.create(Tower.prototype), td);
         t.draw(ctx);
       }
 
-      // Troops
       for (const td of s.troops) {
         if (!td.alive) continue;
         const def = CARDS[td.cardKey] || {};
@@ -318,7 +312,6 @@ class Game {
         t.draw(ctx);
       }
 
-      // Projectiles
       for (const pd of s.projectiles) {
         if (!pd.alive) continue;
         ctx.beginPath();
@@ -335,40 +328,46 @@ class Game {
       }
     }
 
-    // Deploy ghost + zone highlight (server coords, inside flip)
+    // Deploy zone + ghost — guest deploys in TOP half (their territory)
     if (this.selectedCard !== null) {
-      const key  = this.playerQueue[this.selectedCard];
-      const card = CARDS[key];
-      const isSpell = card && card.type === 'spell';
-      const inZone = isSpell ? true : this.mouseY < C.RIVER_Y;
+      const key    = this.playerQueue[this.selectedCard];
+      const card   = CARDS[key];
+      if (card) {
+        const isSpell = card.type === 'spell';
+        const inZone  = isSpell || this.mouseY < C.RIVER_Y;
 
-      if (inZone && card) {
-        // Zone highlight
-        ctx.fillStyle = 'rgba(52,152,219,0.09)';
-        if (isSpell) {
-          ctx.fillRect(0, 0, C.W, C.H);
-        } else {
+        if (!isSpell) {
+          ctx.fillStyle = 'rgba(52,152,219,0.09)';
           ctx.fillRect(0, 0, C.W, C.RIVER_Y);
           ctx.strokeStyle = 'rgba(93,173,226,0.55)';
           ctx.lineWidth = 2;
           ctx.setLineDash([6, 6]);
           ctx.strokeRect(2, 2, C.W - 4, C.RIVER_Y - 4);
           ctx.setLineDash([]);
+        } else {
+          ctx.fillStyle = 'rgba(52,152,219,0.05)';
+          ctx.fillRect(0, 0, C.W, C.H);
         }
-        // Ghost
-        ctx.globalAlpha = 0.5;
-        ctx.beginPath();
-        ctx.arc(this.mouseX, this.mouseY, card.r || 20, 0, Math.PI * 2);
-        ctx.fillStyle = card.bgColor || '#999';
-        ctx.fill();
-        ctx.globalAlpha = 1;
+
+        if (inZone) {
+          ctx.globalAlpha = 0.5;
+          ctx.beginPath();
+          ctx.arc(this.mouseX, this.mouseY, card.r || 20, 0, Math.PI * 2);
+          ctx.fillStyle = card.bgColor || '#999';
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
       }
     }
 
-    ctx.restore(); // ← end flipped section
-
-    // Timer drawn in normal orientation (outside the flip)
     this._drawTimer(ctx);
+
+    // Side label so the guest knows which half is theirs
+    ctx.fillStyle = 'rgba(93,173,226,0.55)';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('← YOUR SIDE', 6, 6);
   }
 
   _drawEffectFromData(ctx, ed) {
@@ -525,10 +524,11 @@ class Game {
       ctx.beginPath(); ctx.moveTo(RIGHT_BRIDGE_X - hw + 3, y); ctx.lineTo(RIGHT_BRIDGE_X + hw - 3, y); ctx.stroke();
     }
 
-    // Team tints
-    ctx.fillStyle = 'rgba(231,76,60,0.07)';
+    // Team tints — perspective-aware so each player sees their half in blue
+    const topIsEnemy = !isMine('player'); // guest: myTeam='enemy', so isMine('player')=false → top is theirs
+    ctx.fillStyle = topIsEnemy ? 'rgba(52,152,219,0.07)' : 'rgba(231,76,60,0.07)';
     ctx.fillRect(0, 0, W, RIVER_Y);
-    ctx.fillStyle = 'rgba(52,152,219,0.07)';
+    ctx.fillStyle = topIsEnemy ? 'rgba(231,76,60,0.07)' : 'rgba(52,152,219,0.07)';
     ctx.fillRect(0, RIVER_Y + RIVER_H, W, H - RIVER_Y - RIVER_H);
 
     // Centre dashed line
@@ -583,7 +583,17 @@ class Game {
 
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.beginPath();
-    ctx.roundRect(C.W / 2 - 34, 6, 68, 28, 8);
+    const _tx = C.W / 2 - 34, _ty = 6, _tw = 68, _th = 28, _tr = 8;
+    ctx.moveTo(_tx + _tr, _ty);
+    ctx.lineTo(_tx + _tw - _tr, _ty);
+    ctx.quadraticCurveTo(_tx + _tw, _ty, _tx + _tw, _ty + _tr);
+    ctx.lineTo(_tx + _tw, _ty + _th - _tr);
+    ctx.quadraticCurveTo(_tx + _tw, _ty + _th, _tx + _tw - _tr, _ty + _th);
+    ctx.lineTo(_tx + _tr, _ty + _th);
+    ctx.quadraticCurveTo(_tx, _ty + _th, _tx, _ty + _th - _tr);
+    ctx.lineTo(_tx, _ty + _tr);
+    ctx.quadraticCurveTo(_tx, _ty, _tx + _tr, _ty);
+    ctx.closePath();
     ctx.fill();
 
     ctx.font = '13px serif';
@@ -708,9 +718,8 @@ class Game {
       const sx = C.W / rect.width, sy = C.H / rect.height;
       const cx = (e.clientX - rect.left) * sx;
       const cy = (e.clientY - rect.top)  * sy;
-      // Guest: server coords are flipped (canvas is drawn rotated 180°)
-      this.mouseX = this.mode === 'guest' ? C.W - cx : cx;
-      this.mouseY = this.mode === 'guest' ? C.H - cy : cy;
+      this.mouseX = cx;
+      this.mouseY = cy;
     });
 
     this.canvas.addEventListener('click', e => {
@@ -732,12 +741,9 @@ class Game {
     const isSpell = card.type === 'spell';
 
     if (this.mode === 'guest') {
-      // Transform canvas coords → server coords (180° flip)
-      const sx = C.W - cx;
-      const sy = C.H - cy;
-
-      // Guest deploys in their half: server y < RIVER_Y (top)
-      if (!isSpell && sy >= C.RIVER_Y) {
+      // No flip: guest sees server coords directly.
+      // Guest's territory is the TOP half (y < RIVER_Y) — 'enemy' towers are at top.
+      if (!isSpell && cy >= C.RIVER_Y) {
         this.selectedCard = null; this.renderCards(); return;
       }
       if (this.playerElixir < card.cost) {
@@ -751,7 +757,7 @@ class Game {
       this.renderCards();
 
       if (this.ws && this.ws.readyState === 1) {
-        this.ws.send(JSON.stringify({ type: 'deploy', cardKey: key, x: sx, y: sy }));
+        this.ws.send(JSON.stringify({ type: 'deploy', cardKey: key, x: cx, y: cy }));
       }
       return;
     }
