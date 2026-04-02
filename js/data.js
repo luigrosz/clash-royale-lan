@@ -20,8 +20,8 @@ const C = {
   TOWER_DMG: 90,    KING_DMG: 140,
 
   ELIXIR_REGEN: 1.4, MAX_ELIXIR: 10,
-  GAME_DURATION: 180,   // seconds
-  OVERTIME_DURATION: 60,
+  GAME_DURATION: 10,   // seconds
+  OVERTIME_DURATION: 10,
 };
 
 // ─── Card Definitions ─────────────────────────────────────────────────────────
